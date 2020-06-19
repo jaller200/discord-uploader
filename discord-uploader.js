@@ -59,3 +59,22 @@ if (program.dir && program.file) {
         }
     }
 })();
+
+
+
+// -- MARK: Functions
+
+/**
+ * Reads a directory and returns the resulting information with the 
+ * following structure:
+ * 
+ *  {
+ *      "type": "dir" | "file",
+ *      "path": <path>
+ *  }
+ * 
+ * @param {string} dir The directory
+ */
+async function readDirectory(dir) {
+    // TODO: Implement
+}

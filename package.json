@@ -2,7 +2,7 @@
   "name": "discord-uploader",
   "version": "1.0.0",
   "description": "A command line uploader for posting messages or files to Discord",
-  "main": "index.js",
+  "main": "discord-uploader.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
