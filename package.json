@@ -1,0 +1,31 @@
+{
+  "name": "discord-uploader",
+  "version": "1.0.0",
+  "description": "A command line uploader for posting messages or files to Discord",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jaller200/discord-uploader.git"
+  },
+  "keywords": [
+    "discord",
+    "uploader",
+    "command",
+    "line",
+    "file",
+    "files"
+  ],
+  "author": "Jonathan Hart",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/jaller200/discord-uploader/issues"
+  },
+  "homepage": "https://github.com/jaller200/discord-uploader#readme",
+  "dependencies": {
+    "commander": "^5.1.0",
+    "request": "^2.88.2"
+  }
+}
