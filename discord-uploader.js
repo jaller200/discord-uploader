@@ -23,6 +23,18 @@ colours.setTheme({
     success: 'bgGreen',
 });
 
+/**
+ * The various log messages.
+ * @param message All take a message
+ */
+const log = {
+    debug(message) { console.log(message); },
+    info(message) { console.log(message.info); },
+    warn(message) { console.log(message.warn); },
+    error(message) { console.log(message.error); },
+    success(message) { console.log(message.success); },
+};
+
 
 
 // -- MARK: Stats
@@ -186,8 +198,6 @@ async function postFiles(authToken, channelID, files, message = undefined, messa
 
         // Attach our message if need be
         if (message && message.length && message.length !== 0 && (messageAll || i === 0)) {
-            console.log(messageAll);
-            console.log(i);
             options.formData.content = `${message}`;
         }
 
@@ -420,19 +430,3 @@ async function readDirectory(dir, includeHidden = false) {
         throw new Error(err);
     }
 }
-
-
-
-// -- MARK: Logging
-
-/**
- * The various log messages.
- * @param message All take a message
- */
-const log = {
-    debug(message) { console.log(message); },
-    info(message) { console.log(message.info); },
-    warn(message) { console.log(message.warn); },
-    error(message) { console.log(message.error); },
-    success(message) { console.log(message.success); },
-};
