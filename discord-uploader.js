@@ -56,7 +56,6 @@ program
     // Flags
     .option('--include-hidden', 'Includes hidden files / folders')
     .option('--message-all', 'Attaches a sent message to all attachments. Default is only the first')
-    .option('--rate-threshold <rate>', 'The time to wait before sending another message. If this is too low, you will be rate-limited by Discord.', parseFloat);
 
 // Parse the arguments
 program.parse(process.argv);
