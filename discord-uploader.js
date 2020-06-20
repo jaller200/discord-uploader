@@ -182,9 +182,12 @@ async function postFiles(authToken, channelID, files, message = undefined, messa
 
         // Add the file
         options.formData.file = fs.createReadStream(files[i].path);
+        options.formData.content = '';
 
         // Attach our message if need be
         if (message && message.length && message.length !== 0 && (messageAll || i === 0)) {
+            console.log(messageAll);
+            console.log(i);
             options.formData.content = `${message}`;
         }
 
