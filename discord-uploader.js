@@ -23,10 +23,16 @@ colours.setTheme({
 
 
 
-// -- MARK: Globals
+// -- MARK: Stats
 
-/** The starting rate limit in milliseconds. May be increased over the course of the program. */
-let RATE_LIMIT = 500;
+// Create our stat variables
+let failCount = 0;
+let successCount = 0;
+let throttledCount = 0;
+let throttledTotalTime = 0;
+
+// Create our starting rate limit (1000 ms)
+let rateLimit = 1000;
 
 
 
@@ -55,13 +61,13 @@ program.parse(process.argv);
 
 // If nothing is set, we have a program
 if (!program.dir && !program.file && !program.message) {
-    console.log("error: please specify either a message or file / directory to send. Type '--help' for help");
+    log.error("error: please specify either a message or file / directory to send. Type '--help' for help");
     return;
 }
 
 // Check if both --dir and --file are set
 if (program.dir && program.file) {
-    console.log("error: please specify a directory '--dir' or a file '--file' but not both");
+    log.error("error: please specify a directory '--dir' or a file '--file' but not both");
     return;
 }
 
@@ -85,13 +91,26 @@ if (program.dir && program.file) {
             try {
                 files = await readDirectory(program.dir, program.includeHidden);
             } catch (e) {
-                console.log(e);
+                log.error(e);
             }
         } else {
             
             // Stat the file
             const stat = await fs.promises.stat(program.file);
-            if (stat.name.charAt(0) !== '.' || (stat.name.charAt(0) === '.' && program.includeHidden)) {
+            if (!stat) {
+                log.error(`Unable to get stats for file '${program.file}'`);
+                return;
+            }
+
+            // Check if it's a directory
+            if (stat.isDirectory()) {
+                log.error("Cannot upload directory as a file!");
+                return;
+            }
+
+            // Get the filename
+            const filename = path.basename(program.file);
+            if (filename.charAt(0) !== '.' || (filename.charAt(0) === '.' && program.includeHidden)) {
                 files.push({
                     path: program.file,
                     type: stat.isFile() ? "file" : "dir"
@@ -102,16 +121,16 @@ if (program.dir && program.file) {
 
     // If we now have no files, we can't do anything
     if (!message && (!files || files.length === 0)) {
-        console.log("error: no message or file(s) to send.");
-        console.log("error: please chack if the message was blank or the directory was empty.");
-        console.log("error: if you want to include hidden files, pass the '--include-hidden' flag");
+        log.error("error: no message or file(s) to send.");
+        log.error("error: please chack if the message was blank or the directory was empty.");
+        log.error("error: if you want to include hidden files, pass the '--include-hidden' flag");
     }
 
     // Now that we have our message and/or files, go ahead and upload them
     try {
         await postMessages(program.auth, program.channel, message, files);
-    } catch (e) {
-        console.log(e);
+    } catch (err) {
+        log.error(`An error occurred while posting the messages: ${err}`);
     }
 })();
 
@@ -128,7 +147,101 @@ if (program.dir && program.file) {
  * @param {boolean} messageAll Whether or not to attach the optional message to all files. Default is only first
  */
 async function postFiles(authToken, channelID, files, message = undefined, messageAll = false) {
-    // TODO: Implement
+    
+    // Check if we have data
+    if (!authToken || !authToken.length || authToken.length === 0) throw new TypeError("Please provide a valid authentication token!");
+    if (!channelID || !channelID.length || channelID.length === 0) throw new TypeError("Please provide a valid channel ID!");
+    if (!files || !files.length) throw new TypeError("Please provide a valid array of files");
+
+    // Create our small helper function
+    const msToHMS = s => `${s / 3.6e6 | 0}h ${(s % 3.6e6) / 6e4 | 0}m ${(s% 6e6) / 1000 | 0}s`;
+
+    // Create the URL
+    const API_URL = `https://discord.com/api/v6/channels/${channelID}/messages`;
+
+    // Create our options
+    let options = {
+        url: API_URL,
+        method: "POST",
+        headers: {
+            "Authorization": authToken,
+        },
+        formData: {
+            "tts": "false",
+        },
+        resolveWithFullResponse: true,
+    };
+
+    // Now iterate through each of our files
+    const start = new Date();
+    for (let i = 0; i < files.length; ++i) {
+
+        // Make sure the file is not a directory
+        if (files[i].type === "dir") continue;
+
+        // Add the file
+        options.formData.file = fs.createReadStream(files[i].path);
+
+        // Attach our message if need be
+        if (message && message.length && message.length !== 0 && (messageAll || i === 0)) {
+            options.formData.content = `${message}`;
+        }
+
+        const startTime = new Date();
+        try {
+            const response = await request.post(options);
+            if (!response || response.statusCode !== 200) {
+                if (response)
+                    log.error(`Error uploading file, API responded with status ${response.statusCode}!`);
+                else
+                    log.error(`Error uploading file, API returned nothing!`);
+
+                failCount++;
+            } else {
+                successCount++;
+            }
+        } catch (err) {
+
+            // If the error is 429, we were rate limited
+            if (err && err.statusCode === 429) {
+
+                // Parse the error data
+                const errorData = JSON.parse(err.error);
+
+                // Get the time
+                const wait = errorData.retry_after;
+
+                // Update our stats
+                throttledCount++;
+                throttledTotalTime += wait;
+
+                // Update our rate limit
+                rateLimit += wait;
+                log.info(`Being rate limited by the API for ${wait}ms! Adjusting upload delay to ${rateLimit}ms.`);
+
+                // Sleep for twice the amount and retry
+                log.info(`Cooling down for ${wait*2}ms before retrying...`);
+                await sleep(wait*2);
+                i--;
+            } else {
+                log.error(`Error uploading file, API responded with status ${err.statusCode}!`);
+                log.debug(`Error: ${err}`);
+                failCount++;
+            }
+        }
+        const endTime = new Date();
+        const timeDelta = endTime.getTime() - startTime.getTime();
+        
+        const waitTime = rateLimit - timeDelta;
+        if (waitTime > 0) {
+            await sleep(waitTime);
+        }
+    }
+
+    log.success(`Ended at ${new Date().toLocaleString()}! Total time: ${msToHMS(Date.now() - start.getTime())}`);
+    log.info(`Rate Limited: ${throttledCount} times. Total time throttled: ${msToHMS(throttledTotalTime)}.`);
+    log.info(`Uploaded ${successCount} files, ${failCount} failed`);
+    return true;
 }
 
 /**
@@ -139,9 +252,12 @@ async function postFiles(authToken, channelID, files, message = undefined, messa
  */
 async function postMessage(authToken, channelID, message) {
 
-    if (!authToken || authToken.length === 0) throw TypeError("Please provide a valid authentication token");
-    if (!channelID || channelID.length === 0) throw TypeError("Please provide a valid channel ID");
-    if (!message || message.length === 0) throw TypeError("Please provide a valid message");
+    if (!authToken || authToken.length === 0) throw new TypeError("Please provide a valid authentication token");
+    if (!channelID || channelID.length === 0) throw new TypeError("Please provide a valid channel ID");
+    if (!message || message.length === 0) throw new TypeError("Please provide a valid message");
+
+    // Create our small helper function
+    const msToHMS = s => `${s / 3.6e6 | 0}h ${(s % 3.6e6) / 6e4 | 0}m ${(s% 6e6) / 1000 | 0}s`;
 
     // Create the URL
     const API_URL = `https://discord.com/api/v6/channels/${channelID}/messages`;
@@ -162,27 +278,48 @@ async function postMessage(authToken, channelID, message) {
     };
 
     // Now send the data
+    const start = new Date();
     try {
-        await request.post(options);
-    } catch (error) {
+        const response = await request.post(options);
+        if (!response || response.statusCode !== 200) {
+            if (response)
+                log.error(`Error posting message, API responded with status ${response.statusCode}!`);
+            else
+                log.error(`Error posting message, API returned nothing!`);
+
+            failCount++;
+        } else {
+            successCount++;
+        }
+    } catch (err) {
 
         // If the error is 429, we were rate limited
-        if (error.statusCode === 429) {
+        if (err && err.statusCode === 429) {
+
+            // Parse the error data
+            const errorData = JSON.parse(err.error);
 
             // Get the time
-            const wait = error.error.retry_after;
-            log.warn(`Being rate limited by the API for ${w}ms - will resend...`);
+            const wait = errorData.retry_after;
+
+            // Update our stats
+            throttedTotalTime += wait;
 
             // Sleep for twice the amount and retry
-            await sleep(w*2);
+            log.warn(`Being rate limited by the API for ${wait}ms - will resend...`);
+            await sleep(wait*2);
             return await postMessage(authToken, channelID, message);
         } else {
-            return log.error(`Error posting message - API responded with status ${error.statusCode}!`);
+            log.error(`Error posting message, API responded with status ${err.statusCode}!`);
+            log.debug(`Error: ${err}`);
+            return false;
         }
     }
 
     // Success!
-    log.success("Successfully posted message!");
+    log.success(`Ended at ${new Date().toLocaleString()}! Total time: ${msToHMS(Date.now() - start.getTime())}`);
+    log.info(`Total time throtted: ${msToHMS(throttledTotalTime)}`);
+    return true;
 }
 
 /**
@@ -195,15 +332,15 @@ async function postMessage(authToken, channelID, message) {
 async function postMessages(authToken, channelID, message, files) {
 
     // Check if we have our data
-    if (!authToken || authToken.length === 0) throw new TypeError("Please provide a valid authentication token!");
-    if (!channelID || channelID.length === 0) throw new TypeError("Please provide a valid channel ID!");
+    if (!authToken || !authToken.length || authToken.length === 0) throw new TypeError("Please provide a valid authentication token!");
+    if (!channelID || !channelID.length || channelID.length === 0) throw new TypeError("Please provide a valid channel ID!");
     if (!message && (!files || !files.length || files.length === 0)) throw new TypeError("Please provide either a set of files or a message or both!");
     
     // If we have no files, just send a message
     if (!files || !files.length || files.length === 0) {
         await postMessage(authToken, channelID, message);
     } else {
-        return log.info("To be implemented...");
+        await postFiles(authToken, channelID, files, message, program.messageAll);
     }
 }
 
@@ -242,8 +379,6 @@ async function readDirectory(dir, includeHidden = false) {
     // Make sure we actually have information
     if (!dir || !dir.length || dir.length === 0) throw new TypeError("Please provide a valid directory");
 
-    // Read our data
-
     // Make sure we actually have information
     if (!dir || dir.trim().length === 0) return reject("Please provide a directory");
         
@@ -277,8 +412,8 @@ async function readDirectory(dir, includeHidden = false) {
         }
 
         return data;
-    } catch (e) {
-        throw new Error(e);
+    } catch (err) {
+        throw new Error(err);
     }
 }
 
