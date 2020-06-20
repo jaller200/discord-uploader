@@ -5,8 +5,28 @@ const fs = require('fs');
 const path = require('path');
 
 // 3rd Party
+const colours = require('colors');
 const program = require('commander');
-const request = require('request');
+const request = require('request-promise');
+
+
+
+// -- MARK: Setup
+
+// Set the colour themes
+colours.setTheme({
+    info: 'bgBlue',
+    warn: 'yellow',
+    error: 'red',
+    success: 'bgGreen',
+});
+
+
+
+// -- MARK: Globals
+
+/** The starting rate limit in milliseconds. May be increased over the course of the program. */
+let RATE_LIMIT = 500;
 
 
 
@@ -27,7 +47,8 @@ program
 
     // Flags
     .option('--include-hidden', 'Includes hidden files / folders')
-    .option('--message-all', 'Attaches a sent message to all attachments. Default is only the first');
+    .option('--message-all', 'Attaches a sent message to all attachments. Default is only the first')
+    .option('--rate-threshold <rate>', 'The time to wait before sending another message. If this is too low, you will be rate-limited by Discord.', parseFloat);
 
 // Parse the arguments
 program.parse(process.argv);
@@ -60,13 +81,12 @@ if (program.dir && program.file) {
         // Get our list of files depending on what we are
         if (isDirectory) {
 
-            // TODO: Read directory
+            // Read directory
             try {
                 files = await readDirectory(program.dir, program.includeHidden);
             } catch (e) {
                 console.log(e);
             }
-            console.log(files);
         } else {
             
             // Stat the file
@@ -80,21 +100,19 @@ if (program.dir && program.file) {
         }
     }
 
-    console.log(files);
-
     // If we now have no files, we can't do anything
     if (!message && (!files || files.length === 0)) {
         console.log("error: no message or file(s) to send.");
         console.log("error: please chack if the message was blank or the directory was empty.");
         console.log("error: if you want to include hidden files, pass the '--include-hidden' flag");
-    } else {
-
-        // TODO: Remove this soon
-        console.log("Message: ", (!!message ? message : "<none>"));
-        console.log(files);
     }
 
-    // Now we have our message and/or files. Go ahead and upload them
+    // Now that we have our message and/or files, go ahead and upload them
+    try {
+        await postMessages(program.auth, program.channel, message, files);
+    } catch (e) {
+        console.log(e);
+    }
 })();
 
 
@@ -102,17 +120,104 @@ if (program.dir && program.file) {
 // -- MARK: Discord Functions
 
 /**
+ * Posts an array of files to a channel.
+ * @param {string} authToken The authentication token
+ * @param {string} channelID The channel ID
+ * @param {array} files An array of files
+ * @param {string} message An optional message
+ * @param {boolean} messageAll Whether or not to attach the optional message to all files. Default is only first
+ */
+async function postFiles(authToken, channelID, files, message = undefined, messageAll = false) {
+    // TODO: Implement
+}
+
+/**
+ * Posts a message to a channel.
+ * @param {string} authToken The authentication token
+ * @param {string} channelID The channel ID
+ * @param {string} message The message to post
+ */
+async function postMessage(authToken, channelID, message) {
+
+    if (!authToken || authToken.length === 0) throw TypeError("Please provide a valid authentication token");
+    if (!channelID || channelID.length === 0) throw TypeError("Please provide a valid channel ID");
+    if (!message || message.length === 0) throw TypeError("Please provide a valid message");
+
+    // Create the URL
+    const API_URL = `https://discord.com/api/v6/channels/${channelID}/messages`;
+
+    // Create our options
+    const options = {
+        url: API_URL,
+        method: "POST",
+        headers: {
+            "Authorization": authToken,
+            "Content-Type": "application/json",
+        },
+        json: {
+            content: `${message}`,
+            tts: "false",
+        },
+        resolveWithFullResponse: true,
+    };
+
+    // Now send the data
+    try {
+        await request.post(options);
+    } catch (error) {
+
+        // If the error is 429, we were rate limited
+        if (error.statusCode === 429) {
+
+            // Get the time
+            const wait = error.error.retry_after;
+            log.warn(`Being rate limited by the API for ${w}ms - will resend...`);
+
+            // Sleep for twice the amount and retry
+            await sleep(w*2);
+            return await postMessage(authToken, channelID, message);
+        } else {
+            return log.error(`Error posting message - API responded with status ${error.statusCode}!`);
+        }
+    }
+
+    // Success!
+    log.success("Successfully posted message!");
+}
+
+/**
  * Posts a message and/or files to a Discord channel.
  * @param {string} authToken The authentication token
  * @param {string} channelID The channel ID
- * @param {string} message The message to send
- * @param {array} files An array of files
+ * @param {string} message An optional message to send
+ * @param {array} files An optional array of files
  */
 async function postMessages(authToken, channelID, message, files) {
-    return new Promise((resolve, reject) => {
-        (async () => {
-            // TODO: Implement
-        })();
+
+    // Check if we have our data
+    if (!authToken || authToken.length === 0) throw new TypeError("Please provide a valid authentication token!");
+    if (!channelID || channelID.length === 0) throw new TypeError("Please provide a valid channel ID!");
+    if (!message && (!files || !files.length || files.length === 0)) throw new TypeError("Please provide either a set of files or a message or both!");
+    
+    // If we have no files, just send a message
+    if (!files || !files.length || files.length === 0) {
+        await postMessage(authToken, channelID, message);
+    } else {
+        return log.info("To be implemented...");
+    }
+}
+
+
+
+// -- MARK: Helper Functions
+
+/**
+ * Sleeps for a set period of time.
+ * @param {number} ms The time to sleep in milliseconds
+ */
+async function sleep(ms) {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms);
     });
 }
 
@@ -133,48 +238,62 @@ async function postMessages(authToken, channelID, message, files) {
  * @param {boolean} includeHidden Whether to include hidden files. Defaults to false
  */
 async function readDirectory(dir, includeHidden = false) {
-    return new Promise((resolve, reject) => {
 
-        // Make sure we actually have information
-        if (!dir || dir.trim().length === 0) return reject("Please provide a directory");
+    // Make sure we actually have information
+    if (!dir || !dir.length || dir.length === 0) throw new TypeError("Please provide a valid directory");
+
+    // Read our data
+
+    // Make sure we actually have information
+    if (!dir || dir.trim().length === 0) return reject("Please provide a directory");
         
-        // Run our code
-        (async () => {
+    // Read the data
+    const data = [];
+    try {
 
-            // Read the data
-            const data = [];
-            try {
+        // Get the files in an array
+        const files = await fs.promises.readdir(dir);
+        for (const file of files) {
 
-                // Get the files in an array
-                const files = await fs.promises.readdir(dir);
-                for (const file of files) {
+            // If the filepath starts with '.', it is a hidden file
+            if (!includeHidden && file.charAt(0) === '.') continue;
 
-                    // If the filepath starts with '.', it is a hidden file
-                    if (!includeHidden && file.charAt(0) === '.') continue;
+            // Get the fule path
+            const fullPath = path.join(dir, file);
+            let type = "unknown";
 
-                    // Get the fule path
-                    const fullPath = path.join(dir, file);
-                    let type = "unknown";
+            // Stat the file to see if we have a file or directory
+            const stat = await fs.promises.stat(fullPath);
+            if (stat.isFile())
+                type = "file";
+            else if (stat.isDirectory())
+                type = "dir";
 
-                    // Stat the file to see if we have a file or directory
-                    const stat = await fs.promises.stat(fullPath);
-                    if (stat.isFile())
-                        type = "file";
-                    else if (stat.isDirectory())
-                        type = "dir";
+            data.push({
+                name: file,
+                path: fullPath,
+                type: type
+            });
+        }
 
-                    data.push({
-                        name: file,
-                        path: fullPath,
-                        type: type
-                    });
-                }
-
-                // Return our data
-                resolve(data);
-            } catch (e) {
-                return reject(e);
-            }
-        })();
-    });
+        return data;
+    } catch (e) {
+        throw new Error(e);
+    }
 }
+
+
+
+// -- MARK: Logging
+
+/**
+ * The various log messages.
+ * @param message All take a message
+ */
+const log = {
+    debug(message) { console.log(message); },
+    info(message) { console.log(message.info); },
+    warn(message) { console.log(message.warn); },
+    error(message) { console.log(message.error); },
+    success(message) { console.log(message.success); },
+};
