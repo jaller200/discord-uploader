@@ -6,6 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "bin": {
+    "discord-uploader": "discord-uploader.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jaller200/discord-uploader.git"
@@ -19,7 +22,7 @@
     "files"
   ],
   "author": "Jonathan Hart",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/jaller200/discord-uploader/issues"
   },
