@@ -65,9 +65,13 @@ program
     .option('-f, --file <file>', 'Upload File')
     .option('-m, --message <message>', 'Post Message')
 
+    // Optional
+    .option('--default-rate-limit <limit>', 'Sets the default rate limit in ms. If not specified (or 0 / negative), it defaults to 1000ms', parseInt)
+
     // Flags
     .option('--include-hidden', 'Includes hidden files / folders')
     .option('--message-all', 'Attaches a sent message to all attachments. Default is only the first')
+    .option('--wl-wait-only', 'Only waits when a 429 rate limit error is hit and does not increase the rate limit wait. USE THIS AT YOUR OWN RISK!!!! Will still respect wait limits, but only if a 429 is hit');
 
 // Parse the arguments
 program.parse(process.argv);
@@ -82,6 +86,11 @@ if (!program.dir && !program.file && !program.message) {
 if (program.dir && program.file) {
     log.error("error: please specify a directory '--dir' or a file '--file' but not both");
     return;
+}
+
+// If we have a default rate limit, set it
+if (program.defaultRateLimit && program.defaultRateLimit > 0) {
+    rateLimit = program.defaultRateLimit;
 }
 
 // Now that we have our data, determine what we need
@@ -243,12 +252,16 @@ async function postFiles(authToken, channelID, files, message = undefined, messa
                 failCount++;
             }
         }
-        const endTime = new Date();
-        const timeDelta = endTime.getTime() - startTime.getTime();
-        
-        const waitTime = rateLimit - timeDelta;
-        if (waitTime > 0) {
-            await sleep(waitTime);
+
+        if (!program.wlWaitOnly) {
+
+            const endTime = new Date();
+            const timeDelta = endTime.getTime() - startTime.getTime();
+            
+            const waitTime = rateLimit - timeDelta;
+            if (waitTime > 0) {
+                await sleep(waitTime);
+            }
         }
     }
 
