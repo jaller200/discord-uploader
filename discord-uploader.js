@@ -239,8 +239,12 @@ async function postFiles(authToken, channelID, files, message = undefined, messa
                 throttledTotalTime += wait;
 
                 // Update our rate limit
-                rateLimit += wait;
-                log.info(`Being rate limited by the API for ${wait}ms! Adjusting upload delay to ${rateLimit}ms.`);
+                if (program.wlWaitOnly) {
+                    log.info(`Being rate limited by the API for ${wait}ms!`);
+                } else {
+                    rateLimit += wait;
+                    log.info(`Being rate limited by the API for ${wait}ms! Adjusting upload delay to ${rateLimit}ms.`);
+                }
 
                 // Sleep for twice the amount and retry
                 log.info(`Cooling down for ${wait*2}ms before retrying...`);
@@ -253,15 +257,12 @@ async function postFiles(authToken, channelID, files, message = undefined, messa
             }
         }
 
-        if (!program.wlWaitOnly) {
-
-            const endTime = new Date();
-            const timeDelta = endTime.getTime() - startTime.getTime();
+        const endTime = new Date();
+        const timeDelta = endTime.getTime() - startTime.getTime();
             
-            const waitTime = rateLimit - timeDelta;
-            if (waitTime > 0) {
-                await sleep(waitTime);
-            }
+        const waitTime = rateLimit - timeDelta;
+        if (waitTime > 0) {
+            await sleep(waitTime);
         }
     }
 
@@ -333,7 +334,7 @@ async function postMessage(authToken, channelID, message) {
             throttedTotalTime += wait;
 
             // Sleep for twice the amount and retry
-            log.warn(`Being rate limited by the API for ${wait}ms - will resend...`);
+            log.warn(`Being rate limited by the API for ${wait}ms`);
             await sleep(wait*2);
             return await postMessage(authToken, channelID, message);
         } else {
