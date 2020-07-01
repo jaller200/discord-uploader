@@ -2,12 +2,16 @@
   "name": "discord-uploader",
   "version": "1.0.0",
   "description": "A command line uploader for posting messages or files to Discord",
-  "main": "discord-uploader.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+  "main": "./lib/discord-uploader.js",
   "bin": {
-    "discord-uploader": "discord-uploader.js"
+    "discord-uploader": "./lib/discord-uploader.js"
+  },
+  "scripts": {
+    "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/discord-uploader.ts",
+    "create": "npm run build && npm run test",
+    "build": "tsc -p .",
+    "test": "sudo npm i -g && discord-uploader",
+    "refresh": "rm -rf ./node_modules ./package-lock.json && npm install"
   },
   "repository": {
     "type": "git",
@@ -28,9 +32,23 @@
   },
   "homepage": "https://github.com/jaller200/discord-uploader#readme",
   "dependencies": {
+    "chalk": "^4.1.0",
+    "clear": "^0.1.0",
     "colors": "^1.4.0",
     "commander": "^5.1.0",
+    "path": "^0.12.7",
     "request": "^2.88.2",
     "request-promise": "^4.2.5"
+  },
+  "devDependencies": {
+    "@types/chalk": "^2.2.0",
+    "@types/commander": "^2.12.2",
+    "@types/node": "^14.0.14",
+    "@types/request": "^2.48.5",
+    "@types/request-promise": "^4.1.46",
+    "nodemon": "^2.0.4",
+    "ts-node": "^8.10.2",
+    "tslint": "^6.1.2",
+    "typescript": "^3.9.6"
   }
 }
