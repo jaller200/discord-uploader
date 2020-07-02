@@ -2,9 +2,9 @@
   "name": "discord-uploader",
   "version": "1.0.0",
   "description": "A command line uploader for posting messages or files to Discord",
-  "main": "./lib/discord-uploader.js",
+  "main": "./dist/discord-uploader.js",
   "bin": {
-    "discord-uploader": "./lib/discord-uploader.js"
+    "discord-uploader": "./dist/discord-uploader.js"
   },
   "scripts": {
     "start": "nodemon --watch 'src/**/*.ts' --exec 'ts-node' src/discord-uploader.ts",
