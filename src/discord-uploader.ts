@@ -3,6 +3,7 @@
 // -- MARK: Imports
 import { Command } from 'commander'
 import { LoggerConsole } from './logger/logger-console';
+import { LoggerPool } from './logger/logger-pool';
 
 
 
@@ -46,11 +47,11 @@ cli
   .parse(process.argv);
 
 // Now that we've parsed the arguments, make sure we have information
-const logger = new LoggerConsole(true);
-console.log("\n");
-logger.debug("debug");
-logger.error("error");
-logger.info("info");
-logger.success("success");
-logger.warn("warn");
-console.log("\n");
+if (cli.logDebug) {
+  console.log("Program Arguments:");
+  console.log(cli.opts());
+}
+
+// Create our logger
+const logger = new LoggerPool(new LoggerConsole(cli.logDebug));
+logger.info("test");
