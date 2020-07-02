@@ -1,6 +1,6 @@
 // -- MARK: Imports
 import { Logger, LoggerType } from './logger';
-import { red, cyan, blue, green, yellow } from 'chalk';
+import { blue, cyan, green, red, yellow, white } from 'chalk';
 
 /**
  * A logger class that will output to STDOUT.
@@ -36,7 +36,7 @@ export class LoggerConsole implements Logger {
     if (this._debug)
       this.log(message, LoggerType.Debug)
   }
-  
+
   /**
    * Outputs an error message. Use this when something goes horribly wrong.
    * @param message The error message
@@ -50,11 +50,11 @@ export class LoggerConsole implements Logger {
    * @param message The info message
    */
   info(message: string): void {
-    this.log(message, LoggerType.Error);
+    this.log(message, LoggerType.Info);
   }
 
   /**
-   * Outputs a success message. Use this when something goes right, 
+   * Outputs a success message. Use this when something goes right
    * or is finished.
    * @param message The success message
    */
@@ -90,12 +90,12 @@ export class LoggerConsole implements Logger {
 
     // Log for the various types
     switch (type) {
-      case LoggerType.Debug: { console.log(cyan(message)); break; }
-      case LoggerType.Error: { console.log(red(message)); break; }
-      case LoggerType.Info: { console.log(blue(message)); break; }
-      case LoggerType.Success: { console.log(green(message)); break; }
-      case LoggerType.Warn: { console.log(yellow(message)); break; }
-      default: { console.log(message); break; }
+      case LoggerType.Debug: { console.log(cyan(formattedMessage)); break; }
+      case LoggerType.Error: { console.log(red(formattedMessage)); break; }
+      case LoggerType.Info: { console.log(white(formattedMessage)); break; }
+      case LoggerType.Success: { console.log(green(formattedMessage)); break; }
+      case LoggerType.Warn: { console.log(yellow(formattedMessage)); break; }
+      default: { console.log(formattedMessage); break; }
     }
   }
 }

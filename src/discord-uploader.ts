@@ -2,6 +2,7 @@
 
 // -- MARK: Imports
 import { Command } from 'commander'
+import { LoggerConsole } from './logger/logger-console';
 
 
 
@@ -45,6 +46,11 @@ cli
   .parse(process.argv);
 
 // Now that we've parsed the arguments, make sure we have information
-if ((!cli.auth || !cli.channel) && (!cli.webhook)) {
-  
-}
+const logger = new LoggerConsole(true);
+console.log("\n");
+logger.debug("debug");
+logger.error("error");
+logger.info("info");
+logger.success("success");
+logger.warn("warn");
+console.log("\n");
